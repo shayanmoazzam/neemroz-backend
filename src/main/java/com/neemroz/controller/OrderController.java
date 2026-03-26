@@ -1,16 +1,19 @@
 package com.neemroz.controller;
 
 import com.neemroz.model.Order;
+import com.neemroz.model.User;
 import com.neemroz.repository.UserRepository;
 import com.neemroz.service.OrderService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -26,6 +29,7 @@ public class OrderController {
                 .getId();
     }
 
+    // ── USER: place order ──
     @PostMapping
     public ResponseEntity<Order> placeOrder(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -44,17 +48,59 @@ public class OrderController {
         return ResponseEntity.ok(order);
     }
 
+    // ── USER: get own orders ──
     @GetMapping
     public ResponseEntity<List<Order>> getUserOrders(
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(orderService.getUserOrders(getUserId(userDetails)));
     }
 
+    // ── USER: get single order ──
     @GetMapping("/{orderId}")
     public ResponseEntity<Order> getOrder(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.getOrderById(orderId, getUserId(userDetails)));
+    }
+
+    // ── USER: cancel own order ──
+    @PatchMapping("/{orderId}/cancel")
+    public ResponseEntity<?> cancelOrder(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long orderId,
+            @RequestBody Map<String, String> body) {
+        try {
+            String reason = body.getOrDefault("reason", "Cancelled by customer");
+            Order order = orderService.cancelOrder(orderId, getUserId(userDetails), reason);
+            return ResponseEntity.ok(order);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    // ── ADMIN: get ALL orders ──
+    @GetMapping("/all")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<Order>> getAllOrders() {
+        return ResponseEntity.ok(orderService.getAllOrders());
+    }
+
+    // ── ADMIN: update order status ──
+    @PatchMapping("/{orderId}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> updateStatus(
+            @PathVariable Long orderId,
+            @RequestBody Map<String, String> body) {
+        try {
+            String status = body.get("status");
+            if (status == null || status.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Status is required"));
+            }
+            Order order = orderService.updateOrderStatus(orderId, status);
+            return ResponseEntity.ok(order);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 
     @Data

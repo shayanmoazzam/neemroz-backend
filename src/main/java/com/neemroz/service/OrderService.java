@@ -3,6 +3,7 @@ package com.neemroz.service;
 import com.neemroz.model.*;
 import com.neemroz.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -98,11 +99,24 @@ public class OrderService {
         return savedOrder;
     }
 
+    // ── USER: get own orders ──
     public List<Order> getUserOrders(Long userId) {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
+    // ── USER: get single order (ownership check) ──
     public Order getOrderById(Long orderId, Long userId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        if (!order.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Not authorized");
+        }
+        return order;
+    }
+
+    // ── USER: cancel own order ──
+    @Transactional
+    public Order cancelOrder(Long orderId, Long userId, String reason) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
@@ -110,9 +124,38 @@ public class OrderService {
             throw new RuntimeException("Not authorized");
         }
 
-        return order;
+        if (order.getStatus() != Order.OrderStatus.PENDING &&
+            order.getStatus() != Order.OrderStatus.PROCESSING) {
+            throw new RuntimeException("Order cannot be cancelled at this stage");
+        }
+
+        // Restore stock
+        for (OrderItem item : order.getItems()) {
+            Product product = item.getProduct();
+            product.setStock(product.getStock() + item.getQuantity());
+            productRepository.save(product);
+        }
+
+        order.setStatus(Order.OrderStatus.CANCELLED);
+        order.setCancelReason(reason);
+        return orderRepository.save(order);
     }
 
+    // ── ADMIN: get ALL orders ──
+    public List<Order> getAllOrders() {
+        return orderRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
+    }
+
+    // ── ADMIN: update order status ──
+    @Transactional
+    public Order updateOrderStatus(Long orderId, String status) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        order.setStatus(Order.OrderStatus.valueOf(status.toUpperCase()));
+        return orderRepository.save(order);
+    }
+
+    // ── PAYMENT ──
     public void updateRazorpayOrderId(Long orderId, String razorpayOrderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));

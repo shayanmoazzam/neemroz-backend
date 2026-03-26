@@ -32,7 +32,7 @@ public class Order {
     @Column(nullable = false)
     private OrderStatus status = OrderStatus.PENDING;
 
-    @Column(nullable = false, precision = 10, scale = 2)
+    @Column(precision = 10, scale = 2)
     private BigDecimal subtotal;
 
     @Column(precision = 10, scale = 2)
@@ -57,6 +57,10 @@ public class Order {
     private String shippingCity;
     private String shippingState;
     private String shippingPinCode;
+
+    // Cancellation reason (set when user cancels order)
+    @Column(length = 500)
+    private String cancelReason;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
