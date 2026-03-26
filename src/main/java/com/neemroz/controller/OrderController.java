@@ -1,5 +1,6 @@
 package com.neemroz.controller;
 
+import com.neemroz.dto.OrderDTO;
 import com.neemroz.model.Order;
 import com.neemroz.model.User;
 import com.neemroz.repository.UserRepository;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -31,7 +33,7 @@ public class OrderController {
 
     // ── USER: place order ──
     @PostMapping
-    public ResponseEntity<Order> placeOrder(
+    public ResponseEntity<OrderDTO> placeOrder(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody PlaceOrderRequest request) {
 
@@ -45,22 +47,25 @@ public class OrderController {
                 request.getShippingState(),
                 request.getShippingPinCode()
         );
-        return ResponseEntity.ok(order);
+        return ResponseEntity.ok(OrderDTO.from(order));
     }
 
     // ── USER: get own orders ──
     @GetMapping
-    public ResponseEntity<List<Order>> getUserOrders(
+    public ResponseEntity<List<OrderDTO>> getUserOrders(
             @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(orderService.getUserOrders(getUserId(userDetails)));
+        List<OrderDTO> dtos = orderService.getUserOrders(getUserId(userDetails))
+                .stream().map(OrderDTO::from).collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
     // ── USER: get single order ──
     @GetMapping("/{orderId}")
-    public ResponseEntity<Order> getOrder(
+    public ResponseEntity<OrderDTO> getOrder(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long orderId) {
-        return ResponseEntity.ok(orderService.getOrderById(orderId, getUserId(userDetails)));
+        return ResponseEntity.ok(OrderDTO.from(
+                orderService.getOrderById(orderId, getUserId(userDetails))));
     }
 
     // ── USER: cancel own order ──
@@ -72,7 +77,7 @@ public class OrderController {
         try {
             String reason = body.getOrDefault("reason", "Cancelled by customer");
             Order order = orderService.cancelOrder(orderId, getUserId(userDetails), reason);
-            return ResponseEntity.ok(order);
+            return ResponseEntity.ok(OrderDTO.from(order));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
@@ -81,8 +86,10 @@ public class OrderController {
     // ── ADMIN: get ALL orders ──
     @GetMapping("/all")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<Order>> getAllOrders() {
-        return ResponseEntity.ok(orderService.getAllOrders());
+    public ResponseEntity<List<OrderDTO>> getAllOrders() {
+        List<OrderDTO> dtos = orderService.getAllOrders()
+                .stream().map(OrderDTO::from).collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
     // ── ADMIN: update order status ──
@@ -97,7 +104,7 @@ public class OrderController {
                 return ResponseEntity.badRequest().body(Map.of("message", "Status is required"));
             }
             Order order = orderService.updateOrderStatus(orderId, status);
-            return ResponseEntity.ok(order);
+            return ResponseEntity.ok(OrderDTO.from(order));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
