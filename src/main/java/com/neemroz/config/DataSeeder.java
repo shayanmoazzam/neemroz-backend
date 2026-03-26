@@ -1,23 +1,46 @@
 package com.neemroz.config;
 
 import com.neemroz.model.Product;
+import com.neemroz.model.User;
 import com.neemroz.repository.ProductRepository;
+import com.neemroz.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 
 @Configuration
+@RequiredArgsConstructor
 public class DataSeeder {
 
     private static final String BASE = "https://www.ayezu.com/images/products/";
 
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
     @Bean
     CommandLineRunner seedData(ProductRepository productRepository) {
         return args -> {
+
+            // ── Seed admin user (only if no admin exists) ──
+            if (userRepository.findByEmail("admin@neemroz.com").isEmpty()) {
+                User admin = User.builder()
+                        .firstName("Admin")
+                        .lastName("Neemroz")
+                        .email("admin@neemroz.com")
+                        .password(passwordEncoder.encode("admin@123"))
+                        .role(User.Role.ADMIN)
+                        .build();
+                userRepository.save(admin);
+                System.out.println("✅ Admin user created: admin@neemroz.com / admin@123");
+            }
+
+            // ── Seed products (only if none exist) ──
             if (productRepository.count() > 0) return;
 
             List<Product> products = Arrays.asList(
@@ -187,7 +210,7 @@ public class DataSeeder {
             );
 
             productRepository.saveAll(products);
-            System.out.println("✅ Ayezu Collection — " + products.size() + " products seeded!");
+            System.out.println("\u2705 Ayezu Collection \u2014 " + products.size() + " products seeded!");
         };
     }
 }
