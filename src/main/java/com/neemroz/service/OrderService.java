@@ -22,6 +22,7 @@ public class OrderService {
     private final CartItemRepository cartItemRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final EmailService emailService;  // ← injected
 
     @Transactional
     public Order placeOrder(Long userId,
@@ -95,6 +96,9 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
         cartItemRepository.deleteByUserId(userId);
+
+        // ── Send email confirmation (async — does NOT block order response) ──
+        emailService.sendOrderConfirmation(savedOrder);
 
         return savedOrder;
     }
